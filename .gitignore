@@ -1,9 +1,25 @@
-.DS_Store
+# --- Secrets: never commit these ---
+.env
+.env.*
+keys/
+secrets/
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+
+# --- iOS / Xcode ---
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
 DerivedData/
+build/
 .build/
 *.ipa
-*.dSYM.zip
 *.dSYM
+*.dSYM.zip
+Pods/
+
+# --- Misc ---
+.DS_Store
