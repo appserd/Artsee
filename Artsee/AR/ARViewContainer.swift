@@ -36,7 +36,7 @@ struct ARWallContainerView: UIViewRepresentable {
     var requestSnapshot: SnapshotRequest
 
     final class SnapshotRequest: ObservableObject {
-        var handler: ((UIImage?) -> Void) -> Void = { $0(nil) }
+        var handler: (@escaping (UIImage?) -> Void) -> Void = { $0(nil) }
         func capture(completion: @escaping (UIImage?) -> Void) {
             handler(completion)
         }
