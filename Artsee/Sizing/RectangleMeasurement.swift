@@ -44,6 +44,14 @@ enum RectangleMeasurement {
 
         let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation(from: image.imageOrientation))
 
+        // Vision returns quad points already adjusted for the orientation
+        // we passed in, i.e. in the *upright* image's coordinate space —
+        // so the aspect ratio for interpreting them must come from the
+        // upright size (`image.size`), not the raw, possibly-rotated
+        // `cgImage.width`/`height`. Using the wrong one here silently
+        // swaps width and height for any portrait photo.
+        let imageAspect = image.size.width / image.size.height
+
         return await Task.detached(priority: .userInitiated) {
             do {
                 try handler.perform([request])
@@ -62,7 +70,6 @@ enum RectangleMeasurement {
                 )
             }
 
-            let imageAspect = CGFloat(cgImage.width) / CGFloat(cgImage.height)
             return quads
                 .sorted { a, b in
                     let areaA = a.normalizedSize(imageAspect: imageAspect)
