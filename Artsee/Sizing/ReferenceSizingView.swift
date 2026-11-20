@@ -1,24 +1,27 @@
 import SwiftUI
 
 /// Sizing method #2: lay a credit card or dollar bill flat next to the
-/// art, in the same plane, fully in frame. We detect both rectangles in
-/// one photo and scale the artwork from the reference's known size.
+/// art, in the same plane, fully in frame. The user outlines each one
+/// by dragging four corner handles — Vision's auto-detection only seeds
+/// a starting guess where it's confident, since trusting it to pick the
+/// right rectangle out of a whole room is not reliable enough on its
+/// own (confirmed live: it happily grabbed a shape drawn inside the
+/// artwork instead of the artwork's own edge).
 struct ReferenceSizingView: View {
     var onConfirm: (Dimensions, SizingMethod) -> Void
 
     private enum Stage {
         case chooseReference
         case detecting
-        case pickArtworkQuad
-        case pickReferenceQuad
+        case outlineArtwork
+        case outlineReference
         case confirmResult(Dimensions)
-        case failed
     }
 
     @State private var stage: Stage = .chooseReference
     @State private var referenceKind: ReferenceObjectKind = .creditCard
     @State private var capturedImage: UIImage?
-    @State private var quads: [DetectedQuad] = []
+    @State private var detectedQuads: [DetectedQuad] = []
     @State private var artworkQuad: DetectedQuad?
     @State private var showCamera = false
 
@@ -33,8 +36,13 @@ struct ReferenceSizingView: View {
                     onCaptured: { image in
                         showCamera = false
                         capturedImage = image
+                        detectedQuads = []
+                        artworkQuad = nil
                         stage = .detecting
-                        Task { await runDetection(on: image) }
+                        Task {
+                            detectedQuads = await RectangleMeasurement.detectQuads(in: image)
+                            stage = .outlineArtwork
+                        }
                     },
                     onCancel: { showCamera = false }
                 )
@@ -49,22 +57,28 @@ struct ReferenceSizingView: View {
             chooseReferenceView
 
         case .detecting:
-            ProgressView("Finding edges…")
+            ProgressView("Looking for a starting outline…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        case .pickArtworkQuad:
-            quadPicker(
-                prompt: "Tap the artwork's outer edge — not a detail inside it, like a frame or a shape in the image",
-                onPick: { quad in
+        case .outlineArtwork:
+            if let capturedImage {
+                CornerDragQuadEditor(
+                    image: capturedImage,
+                    prompt: "Drag the four dots onto the corners of the artwork",
+                    seedQuad: detectedQuads.first
+                ) { quad in
                     artworkQuad = quad
-                    stage = .pickReferenceQuad
+                    stage = .outlineReference
                 }
-            )
+            }
 
-        case .pickReferenceQuad:
-            quadPicker(
-                prompt: "Now tap the outer edge of the \(referenceKind.displayName.lowercased())",
-                onPick: { quad in
+        case .outlineReference:
+            if let capturedImage {
+                CornerDragQuadEditor(
+                    image: capturedImage,
+                    prompt: "Now drag the four dots onto the corners of the \(referenceKind.displayName.lowercased())",
+                    seedQuad: detectedQuads.count > 1 ? detectedQuads[1] : nil
+                ) { quad in
                     guard let image = capturedImage, let artworkQuad else { return }
                     let aspect = image.size.width / image.size.height
                     let dims = RectangleMeasurement.measureArtwork(
@@ -75,7 +89,7 @@ struct ReferenceSizingView: View {
                     )
                     stage = .confirmResult(dims)
                 }
-            )
+            }
 
         case .confirmResult(let dims):
             ScrollView {
@@ -91,7 +105,7 @@ struct ReferenceSizingView: View {
                         .foregroundStyle(.secondary)
 
                     if isImplausiblySmall(dims) {
-                        Text("That's small for most artwork — this usually means a detail inside the photo got tapped instead of the artwork's outer edge. Worth double-checking before saving.")
+                        Text("That's small for most artwork — double-check the outlines before saving.")
                             .font(.footnote)
                             .foregroundStyle(.orange)
                             .multilineTextAlignment(.center)
@@ -102,32 +116,16 @@ struct ReferenceSizingView: View {
                         onConfirm(dims, .referenceObject(referenceKind))
                     }
                     .buttonStyle(.borderedProminent)
-                    Button("Redo tapping (same photo)") {
+                    Button("Redo outlines (same photo)") {
                         artworkQuad = nil
-                        stage = .pickArtworkQuad
+                        stage = .outlineArtwork
                     }
                     Button("Retake photo") {
                         capturedImage = nil
-                        quads = []
+                        detectedQuads = []
                         artworkQuad = nil
                         showCamera = true
                     }
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-            }
-
-        case .failed:
-            ScrollView {
-                VStack(spacing: 16) {
-                    Text("Couldn't find two clear rectangles in that photo.")
-                        .multilineTextAlignment(.center)
-                    Text("Make sure both the art and the reference object are flat, fully in frame, and well lit.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Try again") { showCamera = true }
-                        .buttonStyle(.borderedProminent)
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
@@ -178,73 +176,11 @@ struct ReferenceSizingView: View {
     }
 
     /// A rough sanity check — real artwork measured with this method is
-    /// essentially never smaller than this on both edges. Catches the
-    /// common mistake of tapping a detail inside the photo (a frame
-    /// edge, a shape in the image) instead of the artwork's own outline.
+    /// essentially never smaller than this on both edges. Catches a
+    /// mis-drawn outline before it gets silently saved.
     private func isImplausiblySmall(_ dims: Dimensions) -> Bool {
         let minMeters = 3.0 * LengthUnit.inches.metersPerUnit
         return dims.widthMeters < minMeters && dims.heightMeters < minMeters
-    }
-
-    private func quadPicker(prompt: String, onPick: @escaping (DetectedQuad) -> Void) -> some View {
-        VStack(spacing: 12) {
-            Text(prompt).font(.headline)
-            if let capturedImage {
-                GeometryReader { proxy in
-                    ZStack {
-                        Image(uiImage: capturedImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-
-                        ForEach(quads) { quad in
-                            QuadOverlay(quad: quad, containerSize: proxy.size)
-                                .onTapGesture { onPick(quad) }
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-    }
-
-    private func runDetection(on image: UIImage) async {
-        let found = await RectangleMeasurement.detectQuads(in: image)
-        quads = found
-        stage = found.count >= 2 ? .pickArtworkQuad : .failed
-    }
-}
-
-/// Draws one detected quad as a tappable outline over the photo.
-private struct QuadOverlay: View {
-    let quad: DetectedQuad
-    let containerSize: CGSize
-
-    var body: some View {
-        Path { path in
-            func point(_ p: CGPoint) -> CGPoint {
-                // Vision's origin is bottom-left; SwiftUI's is top-left.
-                CGPoint(x: p.x * containerSize.width, y: (1 - p.y) * containerSize.height)
-            }
-            path.move(to: point(quad.topLeft))
-            path.addLine(to: point(quad.topRight))
-            path.addLine(to: point(quad.bottomRight))
-            path.addLine(to: point(quad.bottomLeft))
-            path.closeSubpath()
-        }
-        .stroke(Color.yellow, lineWidth: 3)
-        .contentShape(
-            Path { path in
-                func point(_ p: CGPoint) -> CGPoint {
-                    CGPoint(x: p.x * containerSize.width, y: (1 - p.y) * containerSize.height)
-                }
-                path.move(to: point(quad.topLeft))
-                path.addLine(to: point(quad.topRight))
-                path.addLine(to: point(quad.bottomRight))
-                path.addLine(to: point(quad.bottomLeft))
-                path.closeSubpath()
-            }
-        )
     }
 }
 
