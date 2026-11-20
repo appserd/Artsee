@@ -10,7 +10,6 @@ struct AddArtworkFlowView: View {
 
     private enum Stage {
         case chooseSource
-        case scanning
         case sizing(UIImage)
         case savedGoToHang(ArtworkPiece)
     }
@@ -18,6 +17,7 @@ struct AddArtworkFlowView: View {
     @State private var stage: Stage = .chooseSource
     @State private var photosPickerItem: PhotosPickerItem?
     @State private var title: String = "Untitled piece"
+    @State private var showScanner = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +32,20 @@ struct AddArtworkFlowView: View {
                 stage = .sizing(image)
             }
         }
+        // Full-screen cover, not a tab's regular content — otherwise the
+        // app's own tab bar stays docked at the bottom and squeezes the
+        // camera UI, hiding its own controls (VisionKit's document
+        // scanner needs the whole screen to itself).
+        .fullScreenCover(isPresented: $showScanner) {
+            DocumentScannerView(
+                onScanned: { image in
+                    showScanner = false
+                    stage = .sizing(image)
+                },
+                onCancel: { showScanner = false }
+            )
+            .ignoresSafeArea()
+        }
     }
 
     @ViewBuilder
@@ -39,13 +53,6 @@ struct AddArtworkFlowView: View {
         switch stage {
         case .chooseSource:
             chooseSourceView
-
-        case .scanning:
-            DocumentScannerView(
-                onScanned: { image in stage = .sizing(image) },
-                onCancel: { stage = .chooseSource }
-            )
-            .ignoresSafeArea()
 
         case .sizing(let image):
             sizingView(for: image)
@@ -65,7 +72,7 @@ struct AddArtworkFlowView: View {
                 .font(.title2.bold())
 
             Button {
-                stage = .scanning
+                showScanner = true
             } label: {
                 Label("Scan a real piece", systemImage: "camera.viewfinder")
                     .frame(maxWidth: .infinity)

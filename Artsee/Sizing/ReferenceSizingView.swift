@@ -8,7 +8,6 @@ struct ReferenceSizingView: View {
 
     private enum Stage {
         case chooseReference
-        case capture
         case detecting
         case pickArtworkQuad
         case pickReferenceQuad
@@ -21,10 +20,26 @@ struct ReferenceSizingView: View {
     @State private var capturedImage: UIImage?
     @State private var quads: [DetectedQuad] = []
     @State private var artworkQuad: DetectedQuad?
+    @State private var showCamera = false
 
     var body: some View {
         content
             .navigationTitle("Measure with reference")
+            // Full-screen cover, not a tab's regular content — the
+            // camera needs the whole screen, not whatever's left after
+            // the app's own tab bar and nav bar take their share.
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraCaptureView(
+                    onCaptured: { image in
+                        showCamera = false
+                        capturedImage = image
+                        stage = .detecting
+                        Task { await runDetection(on: image) }
+                    },
+                    onCancel: { showCamera = false }
+                )
+                .ignoresSafeArea()
+            }
     }
 
     @ViewBuilder
@@ -32,17 +47,6 @@ struct ReferenceSizingView: View {
         switch stage {
         case .chooseReference:
             chooseReferenceView
-
-        case .capture:
-            CameraCaptureView(
-                onCaptured: { image in
-                    capturedImage = image
-                    stage = .detecting
-                    Task { await runDetection(on: image) }
-                },
-                onCancel: { stage = .chooseReference }
-            )
-            .ignoresSafeArea()
 
         case .detecting:
             ProgressView("Finding edges…")
@@ -92,7 +96,7 @@ struct ReferenceSizingView: View {
                     capturedImage = nil
                     quads = []
                     artworkQuad = nil
-                    stage = .capture
+                    showCamera = true
                 }
             }
             .padding()
@@ -106,7 +110,7 @@ struct ReferenceSizingView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                Button("Try again") { stage = .capture }
+                Button("Try again") { showCamera = true }
                     .buttonStyle(.borderedProminent)
             }
             .padding()
@@ -121,7 +125,7 @@ struct ReferenceSizingView: View {
             ForEach(ReferenceObjectKind.allCases) { kind in
                 Button {
                     referenceKind = kind
-                    stage = .capture
+                    showCamera = true
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(kind.displayName).font(.body.bold())
