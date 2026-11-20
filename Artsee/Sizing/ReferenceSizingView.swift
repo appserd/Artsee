@@ -54,7 +54,7 @@ struct ReferenceSizingView: View {
 
         case .pickArtworkQuad:
             quadPicker(
-                prompt: "Tap the artwork",
+                prompt: "Tap the artwork's outer edge — not a detail inside it, like a frame or a shape in the image",
                 onPick: { quad in
                     artworkQuad = quad
                     stage = .pickReferenceQuad
@@ -63,7 +63,7 @@ struct ReferenceSizingView: View {
 
         case .pickReferenceQuad:
             quadPicker(
-                prompt: "Now tap the \(referenceKind.displayName.lowercased())",
+                prompt: "Now tap the outer edge of the \(referenceKind.displayName.lowercased())",
                 onPick: { quad in
                     guard let image = capturedImage, let artworkQuad else { return }
                     let aspect = image.size.width / image.size.height
@@ -80,19 +80,32 @@ struct ReferenceSizingView: View {
         case .confirmResult(let dims):
             ScrollView {
                 VStack(spacing: 20) {
-                    Image(systemName: "checkmark.circle.fill")
+                    Image(systemName: isImplausiblySmall(dims) ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                         .font(.system(size: 48))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(isImplausiblySmall(dims) ? .orange : .green)
                     Text("Measured size")
                         .font(.headline)
                     Text(dims.formatted(in: .inches))
                         .font(.title2.bold())
                     Text(dims.formatted(in: .centimeters))
                         .foregroundStyle(.secondary)
+
+                    if isImplausiblySmall(dims) {
+                        Text("That's small for most artwork — this usually means a detail inside the photo got tapped instead of the artwork's outer edge. Worth double-checking before saving.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+
                     Button("Use this size") {
                         onConfirm(dims, .referenceObject(referenceKind))
                     }
                     .buttonStyle(.borderedProminent)
+                    Button("Redo tapping (same photo)") {
+                        artworkQuad = nil
+                        stage = .pickArtworkQuad
+                    }
                     Button("Retake photo") {
                         capturedImage = nil
                         quads = []
@@ -162,6 +175,15 @@ struct ReferenceSizingView: View {
             }
             .padding()
         }
+    }
+
+    /// A rough sanity check — real artwork measured with this method is
+    /// essentially never smaller than this on both edges. Catches the
+    /// common mistake of tapping a detail inside the photo (a frame
+    /// edge, a shape in the image) instead of the artwork's own outline.
+    private func isImplausiblySmall(_ dims: Dimensions) -> Bool {
+        let minMeters = 3.0 * LengthUnit.inches.metersPerUnit
+        return dims.widthMeters < minMeters && dims.heightMeters < minMeters
     }
 
     private func quadPicker(prompt: String, onPick: @escaping (DetectedQuad) -> Void) -> some View {
