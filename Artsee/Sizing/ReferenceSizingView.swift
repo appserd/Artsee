@@ -79,8 +79,8 @@ struct ReferenceSizingView: View {
                     prompt: "Now drag the four dots onto the corners of the \(referenceKind.displayName.lowercased())",
                     seedQuad: detectedQuads.count > 1 ? detectedQuads[1] : nil
                 ) { quad in
-                    guard let image = capturedImage, let artworkQuad else { return }
-                    let aspect = image.size.width / image.size.height
+                    guard let artworkQuad else { return }
+                    let aspect = capturedImage.size.width / capturedImage.size.height
                     let dims = RectangleMeasurement.measureArtwork(
                         artworkQuad: artworkQuad,
                         referenceQuad: quad,
