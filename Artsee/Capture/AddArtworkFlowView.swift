@@ -92,32 +92,58 @@ struct AddArtworkFlowView: View {
         .padding()
     }
 
+    private enum SizingTab: String, CaseIterable, Identifiable {
+        case manual
+        case reference
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .manual: return "Manual / common size"
+            case .reference: return "Reference object"
+            }
+        }
+    }
+
+    @State private var sizingTab: SizingTab = .manual
+
     private func sizingView(for image: UIImage) -> some View {
+        // A plain VStack + Picker here, not a nested TabView — this
+        // screen is itself one tab of the app's own TabView, and a
+        // second tab bar stacked above the first squeezed everything
+        // above it and clipped buttons with no way to scroll past them.
         VStack(spacing: 0) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
-                .frame(maxHeight: 220)
-                .padding(.top)
+                .frame(maxHeight: 140)
+                .padding(.top, 8)
 
             TextField("Title", text: $title)
                 .textFieldStyle(.roundedBorder)
-                .padding()
+                .padding(.horizontal)
+                .padding(.top, 8)
 
-            TabView {
-                NavigationStack {
-                    ManualSizeEntryView { dims, method in
-                        save(image: image, dimensions: dims, method: method)
+            Picker("Sizing method", selection: $sizingTab) {
+                ForEach(SizingTab.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            Group {
+                switch sizingTab {
+                case .manual:
+                    NavigationStack {
+                        ManualSizeEntryView { dims, method in
+                            save(image: image, dimensions: dims, method: method)
+                        }
+                    }
+                case .reference:
+                    NavigationStack {
+                        ReferenceSizingView { dims, method in
+                            save(image: image, dimensions: dims, method: method)
+                        }
                     }
                 }
-                .tabItem { Label("Manual / common size", systemImage: "ruler") }
-
-                NavigationStack {
-                    ReferenceSizingView { dims, method in
-                        save(image: image, dimensions: dims, method: method)
-                    }
-                }
-                .tabItem { Label("Reference object", systemImage: "creditcard") }
             }
         }
     }

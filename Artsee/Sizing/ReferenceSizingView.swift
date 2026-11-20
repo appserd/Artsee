@@ -78,71 +78,90 @@ struct ReferenceSizingView: View {
             )
 
         case .confirmResult(let dims):
-            VStack(spacing: 20) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.green)
-                Text("Measured size")
-                    .font(.headline)
-                Text(dims.formatted(in: .inches))
-                    .font(.title2.bold())
-                Text(dims.formatted(in: .centimeters))
-                    .foregroundStyle(.secondary)
-                Button("Use this size") {
-                    onConfirm(dims, .referenceObject(referenceKind))
+            ScrollView {
+                VStack(spacing: 20) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.green)
+                    Text("Measured size")
+                        .font(.headline)
+                    Text(dims.formatted(in: .inches))
+                        .font(.title2.bold())
+                    Text(dims.formatted(in: .centimeters))
+                        .foregroundStyle(.secondary)
+                    Button("Use this size") {
+                        onConfirm(dims, .referenceObject(referenceKind))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Retake photo") {
+                        capturedImage = nil
+                        quads = []
+                        artworkQuad = nil
+                        showCamera = true
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                Button("Retake photo") {
-                    capturedImage = nil
-                    quads = []
-                    artworkQuad = nil
-                    showCamera = true
-                }
+                .padding()
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .failed:
-            VStack(spacing: 16) {
-                Text("Couldn't find two clear rectangles in that photo.")
-                    .multilineTextAlignment(.center)
-                Text("Make sure both the art and the reference object are flat, fully in frame, and well lit.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button("Try again") { showCamera = true }
-                    .buttonStyle(.borderedProminent)
+            ScrollView {
+                VStack(spacing: 16) {
+                    Text("Couldn't find two clear rectangles in that photo.")
+                        .multilineTextAlignment(.center)
+                    Text("Make sure both the art and the reference object are flat, fully in frame, and well lit.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try again") { showCamera = true }
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var chooseReferenceView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Pick your reference object")
-                .font(.headline)
-            ForEach(ReferenceObjectKind.allCases) { kind in
-                Button {
-                    referenceKind = kind
-                    showCamera = true
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(kind.displayName).font(.body.bold())
-                        Text(kind.hint).font(.footnote).foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Pick your reference object")
+                    .font(.headline)
+                ForEach(ReferenceObjectKind.allCases) { kind in
+                    Button {
+                        referenceKind = kind
+                        showCamera = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(kind.displayName).font(.body.bold())
+                                if kind == .creditCard {
+                                    Text("Recommended")
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.tint, in: Capsule())
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            Text(kind.hint).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(kind == .creditCard ? Color.accentColor : .clear, lineWidth: 2)
+                        )
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(.primary)
                 }
-                .foregroundStyle(.primary)
+                Text("Lay the art and the reference object flat, side by side, both fully visible in one photo.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            Text("Lay the art and the reference object flat, side by side, both fully visible in one photo.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Spacer()
+            .padding()
         }
-        .padding()
     }
 
     private func quadPicker(prompt: String, onPick: @escaping (DetectedQuad) -> Void) -> some View {
