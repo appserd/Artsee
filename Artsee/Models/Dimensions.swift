@@ -63,6 +63,11 @@ enum CommonSize: String, CaseIterable, Identifiable {
     case sixteenByTwenty = "16 × 20 in"
     case eighteenByTwentyFour = "18 × 24 in"
     case twentyFourByThirtySix = "24 × 36 in"
+    case tenByTenSquare = "10 × 10 in (square)"
+    case twelveByTwelveSquare = "12 × 12 in (square)"
+    case sixteenBySixteenSquare = "16 × 16 in (square)"
+    case twentyByTwentySquare = "20 × 20 in (square)"
+    case twentyFourByTwentyFourSquare = "24 × 24 in (square)"
 
     var id: String { rawValue }
 
@@ -74,6 +79,11 @@ enum CommonSize: String, CaseIterable, Identifiable {
         case .sixteenByTwenty: return Dimensions(width: 16, height: 20, unit: .inches)
         case .eighteenByTwentyFour: return Dimensions(width: 18, height: 24, unit: .inches)
         case .twentyFourByThirtySix: return Dimensions(width: 24, height: 36, unit: .inches)
+        case .tenByTenSquare: return Dimensions(width: 10, height: 10, unit: .inches)
+        case .twelveByTwelveSquare: return Dimensions(width: 12, height: 12, unit: .inches)
+        case .sixteenBySixteenSquare: return Dimensions(width: 16, height: 16, unit: .inches)
+        case .twentyByTwentySquare: return Dimensions(width: 20, height: 20, unit: .inches)
+        case .twentyFourByTwentyFourSquare: return Dimensions(width: 24, height: 24, unit: .inches)
         }
     }
 }
