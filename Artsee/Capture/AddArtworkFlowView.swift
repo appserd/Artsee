@@ -7,6 +7,10 @@ import PhotosUI
 /// 3. Save to the library and (optionally) jump straight into AR.
 struct AddArtworkFlowView: View {
     @EnvironmentObject private var store: PersistenceStore
+    /// Safe no-op when there's nothing to dismiss (e.g. on its own tab);
+    /// lets this view offer "Done" when opened as a sheet from elsewhere
+    /// (Gallery Wall, My Walls' "+" tile).
+    @Environment(\.dismiss) private var dismiss
 
     private enum Stage {
         case chooseSource
@@ -177,6 +181,9 @@ struct AddArtworkFlowView: View {
                 title = "Untitled piece"
                 stage = .chooseSource
             }
+
+            Button("Done") { dismiss() }
+                .foregroundStyle(.secondary)
             Spacer()
         }
         .padding()

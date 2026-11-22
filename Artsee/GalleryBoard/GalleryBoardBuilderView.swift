@@ -7,6 +7,7 @@ struct GalleryBoardBuilderView: View {
 
     @State private var selectedIds: Set<UUID> = []
     @State private var preset: BoardLayoutPreset = .grid
+    @State private var showAddArt = false
 
     private var selectedPieces: [ArtworkPiece] {
         store.artworkPieces.filter { selectedIds.contains($0.id) }
@@ -25,20 +26,29 @@ struct GalleryBoardBuilderView: View {
             }
             .navigationTitle("Gallery Wall")
         }
+        .sheet(isPresented: $showAddArt) {
+            AddArtworkFlowView()
+        }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: "square.grid.3x2")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text("Add a few pieces first")
                 .font(.headline)
-            Text("Gallery walls work best with 3–5 pieces. Head to Add Art to scan or import some.")
+            Text("Gallery walls work best with 3–5 pieces.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
+            Button {
+                showAddArt = true
+            } label: {
+                Label("Add Art", systemImage: "plus.square.on.square")
+            }
+            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -70,6 +80,21 @@ struct GalleryBoardBuilderView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                }
+
+                Button {
+                    showAddArt = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                        Text("Add Art")
+                            .font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 120)
+                    .foregroundStyle(.secondary)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
             .padding()
