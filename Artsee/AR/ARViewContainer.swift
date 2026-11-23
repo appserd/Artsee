@@ -89,6 +89,11 @@ struct ARWallContainerView: UIViewRepresentable {
     final class Coordinator: NSObject, ARSessionDelegate {
         private let parent: ARWallContainerView
         weak var arView: ARView?
+        /// Refreshed on every syncPieces call (which updateUIView always
+        /// makes with the current binding value) — `parent` itself is a
+        /// snapshot from Coordinator creation and can't be trusted to
+        /// stay current.
+        private var latestPieces: [ARPieceContent] = []
 
         var wallAnchor: AnchorEntity?
         private var pieceEntities: [UUID: ModelEntity] = [:]
@@ -165,9 +170,18 @@ struct ARWallContainerView: UIViewRepresentable {
             arView.scene.addAnchor(anchor)
             wallAnchor = anchor
             parent.wallIsReady = true
+
+            // syncPieces only otherwise runs from updateUIView, which
+            // SwiftUI calls when its own bindings change — setting
+            // wallAnchor here doesn't trigger that, so without this call
+            // every piece added before the wall was placed would sit
+            // forever never actually added to the scene. Confirmed live:
+            // tapping a wall placed nothing visible at all.
+            syncPieces(latestPieces)
         }
 
         func syncPieces(_ pieces: [ARPieceContent]) {
+            latestPieces = pieces
             guard let wallAnchor else { return }
 
             for content in pieces where !knownPieceIds.contains(content.id) {
