@@ -56,6 +56,21 @@ struct GalleryBoardBuilderView: View {
     private var pickerGrid: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 12)], spacing: 12) {
+                Button {
+                    showAddArt = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                        Text("Add Art")
+                            .font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 120)
+                    .foregroundStyle(.secondary)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                }
+
                 ForEach(store.artworkPieces) { piece in
                     Button {
                         toggle(piece)
@@ -80,21 +95,6 @@ struct GalleryBoardBuilderView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                }
-
-                Button {
-                    showAddArt = true
-                } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.title2)
-                        Text("Add Art")
-                            .font(.caption)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 120)
-                    .foregroundStyle(.secondary)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
             .padding()

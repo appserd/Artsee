@@ -70,15 +70,10 @@ struct SavedWallsView: View {
     private var artworkRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(store.artworkPieces.sorted(by: { $0.dateAdded > $1.dateAdded })) { piece in
-                    NavigationLink {
-                        HangArtworkView(pieces: [piece])
-                    } label: {
-                        ArtworkThumbnail(piece: piece)
-                    }
-                    .buttonStyle(.plain)
-                }
-
+                // Leading, not trailing — with showsIndicators false and
+                // no scroll hint, a trailing tile just reads as cut off
+                // rather than scrollable. Leading means it's never
+                // dependent on scrolling to be seen at all.
                 Button {
                     showAddArt = true
                 } label: {
@@ -91,6 +86,15 @@ struct SavedWallsView: View {
                     .frame(width: 120, height: 120)
                     .foregroundStyle(.secondary)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                ForEach(store.artworkPieces.sorted(by: { $0.dateAdded > $1.dateAdded })) { piece in
+                    NavigationLink {
+                        HangArtworkView(pieces: [piece])
+                    } label: {
+                        ArtworkThumbnail(piece: piece)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal)

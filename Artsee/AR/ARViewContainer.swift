@@ -60,6 +60,7 @@ struct ARWallContainerView: UIViewRepresentable {
         coaching.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         coaching.frame = arView.bounds
         arView.addSubview(coaching)
+        context.coordinator.coachingOverlay = coaching
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         arView.addGestureRecognizer(tap)
@@ -92,6 +93,7 @@ struct ARWallContainerView: UIViewRepresentable {
     final class Coordinator: NSObject, ARSessionDelegate {
         private let parent: ARWallContainerView
         weak var arView: ARView?
+        weak var coachingOverlay: ARCoachingOverlayView?
         /// Refreshed on every syncPieces call (which updateUIView always
         /// makes with the current binding value) — `parent` itself is a
         /// snapshot from Coordinator creation and can't be trusted to
@@ -175,6 +177,13 @@ struct ARWallContainerView: UIViewRepresentable {
             parent.wallIsReady = true
             parent.wallIsApproximate = approximate
 
+            // ARKit's own coaching overlay keeps telling the user to
+            // keep moving the phone — driven by its own tracking/plane
+            // quality heuristic, independent of wallIsReady — which
+            // directly contradicts a piece now being placed. Confirmed
+            // live: both showing at once, reading as broken/confusing.
+            coachingOverlay?.setActive(false, animated: true)
+
             // syncPieces/syncNailMarkers otherwise only run from
             // updateUIView, which SwiftUI calls when its own bindings
             // change — setting wallAnchor here doesn't trigger that, so
@@ -242,12 +251,16 @@ struct ARWallContainerView: UIViewRepresentable {
 
             case .changed:
                 guard let entity = activeDragEntity else { return }
-                // .estimatedPlane: a drag toward any part of the real
-                // wall should keep working even where ARKit hasn't
-                // meshed that patch yet — confirmed live, dragging
-                // stopped dead the moment it hit the mesh's edge.
-                guard let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
-                let worldPos = SIMD3<Float>(result.worldTransform.columns.3.x, result.worldTransform.columns.3.y, result.worldTransform.columns.3.z)
+                // Intersect the touch ray with the wall's own known
+                // plane directly, rather than raycasting against
+                // ARKit's live tracked geometry — that depends on
+                // ARKit having actually meshed/estimated a plane right
+                // under the finger, which fails on textureless walls
+                // and especially for the approximate-placement fallback
+                // (no real plane exists there at all). Confirmed live:
+                // dragging silently did nothing in both cases.
+                guard let ray = arView.ray(through: point),
+                      let worldPos = Self.intersect(ray: ray, wallAnchor: wallAnchor) else { return }
                 let localPos = wallAnchor.convert(position: worldPos, from: nil)
                 entity.position = SIMD3<Float>(localPos.x, localPos.y, 0.002)
 
@@ -260,6 +273,22 @@ struct ARWallContainerView: UIViewRepresentable {
             default:
                 break
             }
+        }
+
+        /// Ray–plane intersection against the wall anchor's own known
+        /// position and normal (its local Z axis, by construction in
+        /// placeWall) — independent of whatever ARKit's live plane
+        /// tracking has or hasn't covered.
+        private static func intersect(ray: (origin: SIMD3<Float>, direction: SIMD3<Float>), wallAnchor: AnchorEntity) -> SIMD3<Float>? {
+            let wallTransform = wallAnchor.transformMatrix(relativeTo: nil)
+            let wallPosition = SIMD3<Float>(wallTransform.columns.3.x, wallTransform.columns.3.y, wallTransform.columns.3.z)
+            let wallNormal = simd_normalize(SIMD3<Float>(wallTransform.columns.2.x, wallTransform.columns.2.y, wallTransform.columns.2.z))
+
+            let denom = simd_dot(ray.direction, wallNormal)
+            guard abs(denom) > 1e-6 else { return nil }
+            let t = simd_dot(wallPosition - ray.origin, wallNormal) / denom
+            guard t > 0 else { return nil }
+            return ray.origin + ray.direction * t
         }
 
         @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
