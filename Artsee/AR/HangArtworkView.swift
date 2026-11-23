@@ -99,17 +99,23 @@ struct HangArtworkView: View {
     }
 
     private var controlBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Button {
                 showFurnitureInput = true
             } label: {
-                Label(furnitureWidthMeters == nil ? "Set furniture" : "Furniture ✓", systemImage: "sofa")
+                Label(furnitureWidthMeters == nil ? "Furniture" : "Furniture ✓", systemImage: "sofa")
+                    .lineLimit(1)
+                    .fixedSize()
             }
+            .buttonStyle(.bordered)
 
             Toggle(isOn: $isNailMode) {
                 Label("Nail spot", systemImage: "pin")
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .toggleStyle(.button)
+            .buttonStyle(.bordered)
 
             Spacer()
 
@@ -117,6 +123,8 @@ struct HangArtworkView: View {
                 captureAndSave()
             } label: {
                 Label("Save", systemImage: "square.and.arrow.down")
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .buttonStyle(.borderedProminent)
             .disabled(!wallIsReady)

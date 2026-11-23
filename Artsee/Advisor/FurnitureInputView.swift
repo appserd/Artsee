@@ -51,6 +51,8 @@ struct FurnitureInputView: View {
                 }
             }
         }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 
