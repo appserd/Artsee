@@ -12,7 +12,7 @@ struct HangArtworkView: View {
     @State private var scaleFactors: [UUID: Double] = [:]
     @State private var nailSpots: [NailSpot] = []
     @State private var wallIsReady = false
-    @State private var isNailMode = false
+    @State private var showNailInput = false
     @State private var furnitureWidthMeters: Double?
     @State private var showFurnitureInput = false
     @State private var mockupName: String
@@ -33,20 +33,13 @@ struct HangArtworkView: View {
         ZStack {
             ARWallContainerView(
                 pieces: $contents,
-                isNailMode: $isNailMode,
+                nailSpots: $nailSpots,
                 wallIsReady: $wallIsReady,
                 onPlacementChanged: { update in
                     if let index = contents.firstIndex(where: { $0.id == update.pieceId }) {
                         contents[index].offsetXMeters = update.offsetXMeters
                         contents[index].offsetYMeters = update.offsetYMeters
                         scaleFactors[update.pieceId] = update.scaleFactor
-                    }
-                },
-                onNailPlaced: { pieceId, x, y in
-                    if let idx = nailSpots.firstIndex(where: { $0.pieceId == pieceId }) {
-                        nailSpots[idx] = NailSpot(id: nailSpots[idx].id, pieceId: pieceId, offsetXMeters: x, offsetYMeters: y)
-                    } else {
-                        nailSpots.append(NailSpot(pieceId: pieceId, offsetXMeters: x, offsetYMeters: y))
                     }
                 },
                 requestSnapshot: snapshotRequest
@@ -61,7 +54,7 @@ struct HangArtworkView: View {
                 HStack(alignment: .bottom) {
                     AdvisorBannerView(messages: advisorMessages, verdict: advisorVerdict)
                     Spacer()
-                    if isNailMode {
+                    if !nailSpots.isEmpty {
                         LevelIndicatorView()
                     }
                 }
@@ -81,6 +74,11 @@ struct HangArtworkView: View {
         .sheet(isPresented: $showFurnitureInput) {
             FurnitureInputView { meters in
                 furnitureWidthMeters = meters
+            }
+        }
+        .sheet(isPresented: $showNailInput) {
+            NailPlacementInputView { result in
+                applyNailPlacement(result)
             }
         }
         .sheet(isPresented: $showPartnerVote) {
@@ -112,13 +110,15 @@ struct HangArtworkView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Toggle(isOn: $isNailMode) {
-                Label("Nail", systemImage: "pin")
+            Button {
+                showNailInput = true
+            } label: {
+                Label(nailSpots.isEmpty ? "Nail" : "Nail ✓", systemImage: "pin")
                     .lineLimit(1)
             }
-            .toggleStyle(.button)
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .disabled(contents.isEmpty)
 
             Spacer(minLength: 4)
 
@@ -165,6 +165,31 @@ struct HangArtworkView: View {
                 offsetXMeters: offset.x,
                 offsetYMeters: offset.y
             )
+        }
+    }
+
+    // MARK: - Nail spot
+
+    /// Computes the nail spot(s) directly from the first piece's
+    /// already-known true-size position and dimensions — not tapped,
+    /// since a tap has no way to know where the hardware on the back
+    /// of the frame actually sits relative to the top of it.
+    private func applyNailPlacement(_ result: NailPlacementResult) {
+        guard let content = contents.first else { return }
+        let scale = scaleFactors[content.id] ?? 1
+        let displayedHeight = content.dimensions.heightMeters * scale
+        let topY = content.offsetYMeters + displayedHeight / 2
+        let nailY = topY - result.dropMeters
+
+        switch result.kind {
+        case .singlePoint:
+            nailSpots = [NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters, offsetYMeters: nailY)]
+        case .twoPoint:
+            let halfSpacing = (result.spacingMeters ?? 0) / 2
+            nailSpots = [
+                NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters - halfSpacing, offsetYMeters: nailY),
+                NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters + halfSpacing, offsetYMeters: nailY),
+            ]
         }
     }
 

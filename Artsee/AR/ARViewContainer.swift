@@ -28,11 +28,10 @@ struct ARPlacementUpdate {
 
 struct ARWallContainerView: UIViewRepresentable {
     @Binding var pieces: [ARPieceContent]
-    @Binding var isNailMode: Bool
+    @Binding var nailSpots: [NailSpot]
     @Binding var wallIsReady: Bool
 
     var onPlacementChanged: (ARPlacementUpdate) -> Void
-    var onNailPlaced: (UUID, Double, Double) -> Void
     var requestSnapshot: SnapshotRequest
 
     final class SnapshotRequest: ObservableObject {
@@ -77,8 +76,8 @@ struct ARWallContainerView: UIViewRepresentable {
     }
 
     func updateUIView(_ arView: ARView, context: Context) {
-        context.coordinator.isNailMode = isNailMode
         context.coordinator.syncPieces(pieces)
+        context.coordinator.syncNailMarkers(nailSpots)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -94,6 +93,7 @@ struct ARWallContainerView: UIViewRepresentable {
         /// snapshot from Coordinator creation and can't be trusted to
         /// stay current.
         private var latestPieces: [ARPieceContent] = []
+        private var latestNailSpots: [NailSpot] = []
 
         var wallAnchor: AnchorEntity?
         private var pieceEntities: [UUID: ModelEntity] = [:]
@@ -101,8 +101,7 @@ struct ARWallContainerView: UIViewRepresentable {
         private var activeDragEntity: ModelEntity?
         private var activePinchEntity: ModelEntity?
         private var pinchStartScale: Float = 1
-
-        var isNailMode = false
+        private var nailMarkerEntities: [UUID: ModelEntity] = [:]
 
         init(_ parent: ARWallContainerView) {
             self.parent = parent
@@ -111,39 +110,10 @@ struct ARWallContainerView: UIViewRepresentable {
         // MARK: - Wall + piece sync
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let arView else { return }
+            guard let arView, wallAnchor == nil else { return }
             let point = gesture.location(in: arView)
-
-            if wallAnchor == nil {
-                guard let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
-                placeWall(at: result)
-                return
-            }
-
-            if isNailMode {
-                // .estimatedPlane, not .existingPlaneGeometry — the
-                // latter only covers the small patch ARKit has meshed
-                // so far, which lags well behind the real wall, making
-                // taps/drags outside that patch silently do nothing.
-                guard let wallAnchor,
-                      let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
-                let worldPos = SIMD3<Float>(result.worldTransform.columns.3.x, result.worldTransform.columns.3.y, result.worldTransform.columns.3.z)
-                let localPos = wallAnchor.convert(position: worldPos, from: nil)
-                placeNailMarker(at: localPos)
-                if let entity = arView.entity(at: point) as? ModelEntity, let pieceId = pieceEntities.first(where: { $0.value === entity })?.key {
-                    parent.onNailPlaced(pieceId, Double(localPos.x), Double(localPos.y))
-                } else if let nearest = pieceEntities.min(by: { lhs, rhs in
-                    distance2D(lhs.value.position, localPos) < distance2D(rhs.value.position, localPos)
-                }) {
-                    parent.onNailPlaced(nearest.key, Double(localPos.x), Double(localPos.y))
-                }
-            }
-        }
-
-        private func distance2D(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
-            let dx = a.x - b.x
-            let dy = a.y - b.y
-            return sqrt(dx * dx + dy * dy)
+            guard let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
+            placeWall(at: result)
         }
 
         private func placeWall(at result: ARRaycastResult) {
@@ -175,13 +145,15 @@ struct ARWallContainerView: UIViewRepresentable {
             wallAnchor = anchor
             parent.wallIsReady = true
 
-            // syncPieces only otherwise runs from updateUIView, which
-            // SwiftUI calls when its own bindings change — setting
-            // wallAnchor here doesn't trigger that, so without this call
-            // every piece added before the wall was placed would sit
-            // forever never actually added to the scene. Confirmed live:
-            // tapping a wall placed nothing visible at all.
+            // syncPieces/syncNailMarkers otherwise only run from
+            // updateUIView, which SwiftUI calls when its own bindings
+            // change — setting wallAnchor here doesn't trigger that, so
+            // without this call anything queued up before the wall was
+            // placed would sit forever never actually added to the
+            // scene. Confirmed live: tapping a wall placed nothing
+            // visible at all.
             syncPieces(latestPieces)
+            syncNailMarkers(latestNailSpots)
         }
 
         func syncPieces(_ pieces: [ARPieceContent]) {
@@ -301,18 +273,28 @@ struct ARWallContainerView: UIViewRepresentable {
             )
         }
 
-        // MARK: - Nail marker
+        // MARK: - Nail markers
 
-        private var nailEntity: ModelEntity?
-
-        private func placeNailMarker(at localPosition: SIMD3<Float>) {
+        /// Nail spots are computed in SwiftUI straight from each piece's
+        /// already-known true-size position — not tapped — so this is a
+        /// pure data sync, the same pattern as syncPieces.
+        func syncNailMarkers(_ spots: [NailSpot]) {
+            latestNailSpots = spots
             guard let wallAnchor else { return }
-            nailEntity?.removeFromParent()
-            let sphere = MeshResource.generateSphere(radius: 0.006)
-            let marker = ModelEntity(mesh: sphere, materials: [SimpleMaterial(color: .systemRed, isMetallic: false)])
-            marker.position = SIMD3<Float>(localPosition.x, localPosition.y, 0.004)
-            wallAnchor.addChild(marker)
-            nailEntity = marker
+
+            let currentIds = Set(spots.map(\.id))
+            for staleId in Set(nailMarkerEntities.keys).subtracting(currentIds) {
+                nailMarkerEntities[staleId]?.removeFromParent()
+                nailMarkerEntities[staleId] = nil
+            }
+
+            for spot in spots where nailMarkerEntities[spot.id] == nil {
+                let sphere = MeshResource.generateSphere(radius: 0.006)
+                let marker = ModelEntity(mesh: sphere, materials: [SimpleMaterial(color: .systemRed, isMetallic: false)])
+                marker.position = SIMD3<Float>(Float(spot.offsetXMeters), Float(spot.offsetYMeters), 0.004)
+                wallAnchor.addChild(marker)
+                nailMarkerEntities[spot.id] = marker
+            }
         }
 
         // MARK: - ARSessionDelegate

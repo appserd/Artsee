@@ -22,7 +22,7 @@ targets:
         CFBundleDisplayName: Artsee
         UILaunchScreen: {}
         UIRequiredDeviceCapabilities: [arm64]
-        NSCameraUsageDescription: "Artsee uses your camera to scan artwork and to measure it next to a reference object."
+        NSCameraUsageDescription: "Artsee uses your camera to scan artwork, measure it and your furniture, and show it on your wall in AR."
         NSPhotoLibraryUsageDescription: "Artsee lets you import artwork photos from your library."
         NSPhotoLibraryAddUsageDescription: "Artsee saves your AR wall mockups to your photo library."
         UISupportedInterfaceOrientations:
