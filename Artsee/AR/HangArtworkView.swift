@@ -93,43 +93,47 @@ struct HangArtworkView: View {
     private var hintBanner: some View {
         Text("Point at your wall, wait for it to highlight, then tap to place your art.")
             .font(.footnote)
+            .multilineTextAlignment(.center)
             .padding(10)
+            .frame(maxWidth: .infinity)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12)
             .padding(.top, 8)
     }
 
     private var controlBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Button {
                 showFurnitureInput = true
             } label: {
                 Label(furnitureWidthMeters == nil ? "Furniture" : "Furniture ✓", systemImage: "sofa")
                     .lineLimit(1)
-                    .fixedSize()
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Toggle(isOn: $isNailMode) {
-                Label("Nail spot", systemImage: "pin")
+                Label("Nail", systemImage: "pin")
                     .lineLimit(1)
-                    .fixedSize()
             }
             .toggleStyle(.button)
             .buttonStyle(.bordered)
+            .controlSize(.small)
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Button {
                 captureAndSave()
             } label: {
                 Label("Save", systemImage: "square.and.arrow.down")
                     .lineLimit(1)
-                    .fixedSize()
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.small)
             .disabled(!wallIsReady)
         }
-        .padding()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(.thinMaterial)
     }
 

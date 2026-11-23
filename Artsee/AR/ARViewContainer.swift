@@ -121,8 +121,12 @@ struct ARWallContainerView: UIViewRepresentable {
             }
 
             if isNailMode {
+                // .estimatedPlane, not .existingPlaneGeometry — the
+                // latter only covers the small patch ARKit has meshed
+                // so far, which lags well behind the real wall, making
+                // taps/drags outside that patch silently do nothing.
                 guard let wallAnchor,
-                      let result = arView.raycast(from: point, allowing: .existingPlaneGeometry, alignment: .vertical).first else { return }
+                      let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
                 let worldPos = SIMD3<Float>(result.worldTransform.columns.3.x, result.worldTransform.columns.3.y, result.worldTransform.columns.3.z)
                 let localPos = wallAnchor.convert(position: worldPos, from: nil)
                 placeNailMarker(at: localPos)
@@ -236,7 +240,11 @@ struct ARWallContainerView: UIViewRepresentable {
 
             case .changed:
                 guard let entity = activeDragEntity else { return }
-                guard let result = arView.raycast(from: point, allowing: .existingPlaneGeometry, alignment: .vertical).first else { return }
+                // .estimatedPlane: a drag toward any part of the real
+                // wall should keep working even where ARKit hasn't
+                // meshed that patch yet — confirmed live, dragging
+                // stopped dead the moment it hit the mesh's edge.
+                guard let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
                 let worldPos = SIMD3<Float>(result.worldTransform.columns.3.x, result.worldTransform.columns.3.y, result.worldTransform.columns.3.z)
                 let localPos = wallAnchor.convert(position: worldPos, from: nil)
                 entity.position = SIMD3<Float>(localPos.x, localPos.y, 0.002)
