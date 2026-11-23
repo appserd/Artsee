@@ -30,6 +30,10 @@ struct ARWallContainerView: UIViewRepresentable {
     @Binding var pieces: [ARPieceContent]
     @Binding var nailSpots: [NailSpot]
     @Binding var wallIsReady: Bool
+    /// True when the wall was placed via the camera-direction fallback
+    /// rather than a real detected/estimated plane — true-size accuracy
+    /// is a guess in that case, so the UI should say so.
+    @Binding var wallIsApproximate: Bool
 
     var onPlacementChanged: (ARPlacementUpdate) -> Void
     var requestSnapshot: SnapshotRequest
@@ -112,20 +116,45 @@ struct ARWallContainerView: UIViewRepresentable {
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let arView, wallAnchor == nil else { return }
             let point = gesture.location(in: arView)
-            guard let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first else { return }
-            placeWall(at: result)
+
+            if let result = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .vertical).first {
+                let hitTransform = result.worldTransform
+                let normal = SIMD3<Float>(hitTransform.columns.1.x, hitTransform.columns.1.y, hitTransform.columns.1.z)
+                let position = SIMD3<Float>(hitTransform.columns.3.x, hitTransform.columns.3.y, hitTransform.columns.3.z)
+                placeWall(normal: normal, position: position, approximate: false)
+                return
+            }
+
+            // A real detected/estimated plane needs some visual texture
+            // to track against — a flat, evenly-painted wall can give
+            // ARKit nothing to find at all, leaving the user stuck with
+            // no way to proceed (confirmed live). Fall back to an
+            // approximate placement using the direction the camera is
+            // pointing and a typical standing distance, so the flow
+            // still works — just flagged as approximate for accuracy.
+            guard let frame = arView.session.currentFrame else { return }
+            let camTransform = frame.camera.transform
+            let camPosition = SIMD3<Float>(camTransform.columns.3.x, camTransform.columns.3.y, camTransform.columns.3.z)
+            let camForward = -SIMD3<Float>(camTransform.columns.2.x, camTransform.columns.2.y, camTransform.columns.2.z)
+            var horizontalForward = SIMD3<Float>(camForward.x, 0, camForward.z)
+            if simd_length(horizontalForward) < 0.0001 {
+                horizontalForward = SIMD3<Float>(0, 0, -1)
+            }
+            horizontalForward = simd_normalize(horizontalForward)
+            let approximateWallDistance: Float = 1.5
+            let position = camPosition + horizontalForward * approximateWallDistance
+            placeWall(normal: -horizontalForward, position: position, approximate: true)
         }
 
-        private func placeWall(at result: ARRaycastResult) {
+        private func placeWall(normal rawNormal: SIMD3<Float>, position: SIMD3<Float>, approximate: Bool) {
             guard let arView else { return }
-            let hitTransform = result.worldTransform
-            let position = SIMD3<Float>(hitTransform.columns.3.x, hitTransform.columns.3.y, hitTransform.columns.3.z)
 
-            // ARKit's convention puts the surface normal along the
-            // transform's Y column for both horizontal and vertical hits.
-            // Rebuild our own basis so local X/Y on the anchor map to
-            // "along the wall, left-right / up-down" regardless of that.
-            let normal = simd_normalize(SIMD3<Float>(hitTransform.columns.1.x, hitTransform.columns.1.y, hitTransform.columns.1.z))
+            // ARKit's convention puts the surface normal along the hit
+            // transform's Y column for both horizontal and vertical
+            // hits. Rebuild our own basis so local X/Y on the anchor map
+            // to "along the wall, left-right / up-down" regardless of
+            // that.
+            let normal = simd_normalize(rawNormal)
             let worldUp = SIMD3<Float>(0, 1, 0)
             var up = worldUp - normal * simd_dot(worldUp, normal)
             if simd_length(up) < 0.001 {
@@ -144,6 +173,7 @@ struct ARWallContainerView: UIViewRepresentable {
             arView.scene.addAnchor(anchor)
             wallAnchor = anchor
             parent.wallIsReady = true
+            parent.wallIsApproximate = approximate
 
             // syncPieces/syncNailMarkers otherwise only run from
             // updateUIView, which SwiftUI calls when its own bindings

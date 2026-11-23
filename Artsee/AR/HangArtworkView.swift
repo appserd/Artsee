@@ -12,6 +12,7 @@ struct HangArtworkView: View {
     @State private var scaleFactors: [UUID: Double] = [:]
     @State private var nailSpots: [NailSpot] = []
     @State private var wallIsReady = false
+    @State private var wallIsApproximate = false
     @State private var showNailInput = false
     @State private var furnitureWidthMeters: Double?
     @State private var showFurnitureInput = false
@@ -35,6 +36,7 @@ struct HangArtworkView: View {
                 pieces: $contents,
                 nailSpots: $nailSpots,
                 wallIsReady: $wallIsReady,
+                wallIsApproximate: $wallIsApproximate,
                 onPlacementChanged: { update in
                     if let index = contents.firstIndex(where: { $0.id == update.pieceId }) {
                         contents[index].offsetXMeters = update.offsetXMeters
@@ -49,6 +51,8 @@ struct HangArtworkView: View {
             VStack {
                 if !wallIsReady {
                     hintBanner
+                } else if wallIsApproximate {
+                    approximateWallBanner
                 }
                 Spacer()
                 HStack(alignment: .bottom) {
@@ -95,6 +99,18 @@ struct HangArtworkView: View {
             .padding(10)
             .frame(maxWidth: .infinity)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+    }
+
+    private var approximateWallBanner: some View {
+        Text("This wall had too little detail for AR to measure precisely, so the distance is approximate — true-size accuracy may be slightly off.")
+            .font(.footnote)
+            .multilineTextAlignment(.center)
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(.orange.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+            .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .padding(.top, 8)
     }
