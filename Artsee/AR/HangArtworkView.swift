@@ -20,6 +20,7 @@ struct HangArtworkView: View {
     @State private var lastSnapshot: UIImage?
     @State private var savedMockup: SavedMockup?
     @State private var showPartnerVote = false
+    @State private var liveResizeDimensions: Dimensions?
 
     @StateObject private var snapshotRequest = ARWallContainerView.SnapshotRequest()
 
@@ -44,9 +45,28 @@ struct HangArtworkView: View {
                         scaleFactors[update.pieceId] = update.scaleFactor
                     }
                 },
+                onPinchChanging: { pieceId, scale in
+                    if let content = contents.first(where: { $0.id == pieceId }) {
+                        liveResizeDimensions = Dimensions(
+                            widthMeters: content.dimensions.widthMeters * scale,
+                            heightMeters: content.dimensions.heightMeters * scale
+                        )
+                    }
+                },
+                onPinchEnded: {
+                    liveResizeDimensions = nil
+                },
                 requestSnapshot: snapshotRequest
             )
             .ignoresSafeArea()
+
+            if !wallIsReady {
+                centerReticle
+            }
+
+            if let liveResizeDimensions {
+                resizeReadout(liveResizeDimensions)
+            }
 
             VStack {
                 if !wallIsReady {
@@ -92,8 +112,27 @@ struct HangArtworkView: View {
         }
     }
 
+    /// A plain crosshair at screen center — "tap here, on your wall" is
+    /// a much clearer instruction than the spot anywhere, and gives the
+    /// user a concrete target instead of guessing.
+    private var centerReticle: some View {
+        Image(systemName: "plus")
+            .font(.system(size: 28, weight: .light))
+            .foregroundStyle(.white)
+            .shadow(radius: 3)
+    }
+
+    private func resizeReadout(_ dims: Dimensions) -> some View {
+        Text(dims.formatted(in: .inches))
+            .font(.headline.monospacedDigit())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.75), in: Capsule())
+            .foregroundStyle(.white)
+    }
+
     private var hintBanner: some View {
-        Text("Point at your wall, wait for it to highlight, then tap to place your art.")
+        Text("Slowly move your phone side to side, pointing at the wall where you want to hang this. Once it stops moving, tap the + at the center of the screen on your wall.")
             .font(.footnote)
             .multilineTextAlignment(.center)
             .padding(10)

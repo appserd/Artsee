@@ -36,6 +36,10 @@ struct ARWallContainerView: UIViewRepresentable {
     @Binding var wallIsApproximate: Bool
 
     var onPlacementChanged: (ARPlacementUpdate) -> Void
+    /// Fired continuously while pinch-resizing, so the UI can show a
+    /// live size readout rather than only the final result.
+    var onPinchChanging: (UUID, Double) -> Void
+    var onPinchEnded: () -> Void
     var requestSnapshot: SnapshotRequest
 
     final class SnapshotRequest: ObservableObject {
@@ -54,13 +58,11 @@ struct ARWallContainerView: UIViewRepresentable {
         arView.session.run(config)
         arView.session.delegate = context.coordinator
 
-        let coaching = ARCoachingOverlayView()
-        coaching.session = arView.session
-        coaching.goal = .verticalPlane
-        coaching.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        coaching.frame = arView.bounds
-        arView.addSubview(coaching)
-        context.coordinator.coachingOverlay = coaching
+        // Deliberately not using ARCoachingOverlayView here — its
+        // wireframe-plus-dot-grid "move iPhone" UI reads as confusing
+        // rather than helpful (confirmed live: "unclear what to do").
+        // HangArtworkView's own plain-text hint banner is the sole
+        // scanning guidance instead.
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         arView.addGestureRecognizer(tap)
@@ -93,7 +95,6 @@ struct ARWallContainerView: UIViewRepresentable {
     final class Coordinator: NSObject, ARSessionDelegate {
         private let parent: ARWallContainerView
         weak var arView: ARView?
-        weak var coachingOverlay: ARCoachingOverlayView?
         /// Refreshed on every syncPieces call (which updateUIView always
         /// makes with the current binding value) — `parent` itself is a
         /// snapshot from Coordinator creation and can't be trusted to
@@ -176,13 +177,6 @@ struct ARWallContainerView: UIViewRepresentable {
             wallAnchor = anchor
             parent.wallIsReady = true
             parent.wallIsApproximate = approximate
-
-            // ARKit's own coaching overlay keeps telling the user to
-            // keep moving the phone — driven by its own tracking/plane
-            // quality heuristic, independent of wallIsReady — which
-            // directly contradicts a piece now being placed. Confirmed
-            // live: both showing at once, reading as broken/confusing.
-            coachingOverlay?.setActive(false, animated: true)
 
             // syncPieces/syncNailMarkers otherwise only run from
             // updateUIView, which SwiftUI calls when its own bindings
@@ -305,12 +299,16 @@ struct ARWallContainerView: UIViewRepresentable {
                 guard let entity = activePinchEntity else { return }
                 let newScale = max(0.2, min(4.0, pinchStartScale * Float(gesture.scale)))
                 entity.scale = SIMD3<Float>(repeating: newScale)
+                if let pieceId = pieceEntities.first(where: { $0.value === entity })?.key {
+                    parent.onPinchChanging(pieceId, Double(newScale))
+                }
 
             case .ended, .cancelled, .failed:
                 if let entity = activePinchEntity, let pieceId = pieceEntities.first(where: { $0.value === entity })?.key {
                     reportPlacement(pieceId: pieceId, entity: entity)
                 }
                 activePinchEntity = nil
+                parent.onPinchEnded()
 
             default:
                 break
