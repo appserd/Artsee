@@ -4,6 +4,7 @@ import SwiftUI
 /// board — `pieces.count > 1` just means more entities on the same wall.
 struct HangArtworkView: View {
     @EnvironmentObject private var store: PersistenceStore
+    @AppStorage("furnitureAdvisorEnabled") private var furnitureAdvisorEnabled = true
     let pieces: [ArtworkPiece]
     var existingMockup: SavedMockup?
     var layoutPreset: BoardLayoutPreset = .freeform
@@ -76,7 +77,9 @@ struct HangArtworkView: View {
                 }
                 Spacer()
                 HStack(alignment: .bottom) {
-                    AdvisorBannerView(messages: advisorMessages, verdict: advisorVerdict)
+                    if furnitureAdvisorEnabled {
+                        AdvisorBannerView(advice: furnitureAdvice)
+                    }
                     Spacer()
                     if !nailSpots.isEmpty {
                         LevelIndicatorView()
@@ -156,14 +159,16 @@ struct HangArtworkView: View {
 
     private var controlBar: some View {
         HStack(spacing: 8) {
-            Button {
-                showFurnitureInput = true
-            } label: {
-                Label(furnitureWidthMeters == nil ? "Furniture" : "Furniture ✓", systemImage: "sofa")
-                    .lineLimit(1)
+            if furnitureAdvisorEnabled {
+                Button {
+                    showFurnitureInput = true
+                } label: {
+                    Label(furnitureWidthMeters == nil ? "Furniture" : "Furniture ✓", systemImage: "sofa")
+                        .lineLimit(1)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
 
             Button {
                 showNailInput = true
@@ -232,20 +237,13 @@ struct HangArtworkView: View {
     private func applyNailPlacement(_ result: NailPlacementResult) {
         guard let content = contents.first else { return }
         let scale = scaleFactors[content.id] ?? 1
-        let displayedHeight = content.dimensions.heightMeters * scale
-        let topY = content.offsetYMeters + displayedHeight / 2
-        let nailY = topY - result.dropMeters
-
-        switch result.kind {
-        case .singlePoint:
-            nailSpots = [NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters, offsetYMeters: nailY)]
-        case .twoPoint:
-            let halfSpacing = (result.spacingMeters ?? 0) / 2
-            nailSpots = [
-                NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters - halfSpacing, offsetYMeters: nailY),
-                NailSpot(pieceId: content.id, offsetXMeters: content.offsetXMeters + halfSpacing, offsetYMeters: nailY),
-            ]
-        }
+        nailSpots = NailSpotCalculator.compute(
+            pieceId: content.id,
+            pieceCenterXMeters: content.offsetXMeters,
+            pieceCenterYMeters: content.offsetYMeters,
+            pieceDisplayedHeightMeters: content.dimensions.heightMeters * scale,
+            result: result
+        )
     }
 
     // MARK: - Advisor
@@ -257,15 +255,9 @@ struct HangArtworkView: View {
         }
     }
 
-    private var advisorMessages: [String] {
-        guard let furnitureWidthMeters, totalDisplayedWidthMeters > 0 else { return [] }
-        let advice = SizeAdvisor.furnitureFitAdvice(artworkWidthMeters: totalDisplayedWidthMeters, furnitureWidthMeters: furnitureWidthMeters)
-        return [advice.message]
-    }
-
-    private var advisorVerdict: SizeAdvisor.Verdict? {
+    private var furnitureAdvice: SizeAdvisor.FurnitureAdvice? {
         guard let furnitureWidthMeters, totalDisplayedWidthMeters > 0 else { return nil }
-        return SizeAdvisor.furnitureFitAdvice(artworkWidthMeters: totalDisplayedWidthMeters, furnitureWidthMeters: furnitureWidthMeters).verdict
+        return SizeAdvisor.furnitureFitAdvice(artworkWidthMeters: totalDisplayedWidthMeters, furnitureWidthMeters: furnitureWidthMeters)
     }
 
     // MARK: - Saving

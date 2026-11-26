@@ -6,6 +6,7 @@ import SwiftUI
 struct SavedWallsView: View {
     @EnvironmentObject private var store: PersistenceStore
     @State private var showAddArt = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -17,9 +18,21 @@ struct SavedWallsView: View {
                 }
             }
             .navigationTitle("My Walls")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showAddArt) {
             AddArtworkFlowView()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 

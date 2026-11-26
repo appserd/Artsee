@@ -40,3 +40,24 @@ targets:
     entitlements:
       path: Artsee/Artsee.entitlements
       properties: {}
+  ArtseeTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ArtseeTests
+    dependencies:
+      - target: Artsee
+    settings:
+      base:
+        DEVELOPMENT_TEAM: 3EWU788PWA
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  Artsee:
+    build:
+      targets:
+        Artsee: all
+        ArtseeTests: [test]
+    test:
+      targets:
+        - ArtseeTests
